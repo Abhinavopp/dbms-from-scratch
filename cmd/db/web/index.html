@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Database Query Interface</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <h1>Database From Scratch</h1>
+        <p>SQL-like query interface for the chapter-by-chapter database</p>
+      </header>
+
+      <section class="panel">
+        <label for="sql">Query</label>
+        <textarea id="sql" rows="6">CREATE TABLE IF NOT EXISTS products (id INTEGER, name TEXT, price DECIMAL(10,2))</textarea>
+        <div class="actions">
+          <button id="run">Run Query</button>
+          <button id="example" class="secondary">Load Example</button>
+        </div>
+      </section>
+
+      <section class="panel results-panel">
+        <h2>Results</h2>
+        <div id="status" class="status">Ready</div>
+        <table>
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
