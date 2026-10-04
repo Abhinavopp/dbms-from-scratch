@@ -19,6 +19,18 @@ func httpServer(port string) error {
 	executor := query.NewExecutor()
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/api/schema", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{"tables": executor.Tables()}); err != nil {
+			http.Error(w, "unable to encode schema response", http.StatusInternalServerError)
+		}
+	})
+
 	mux.HandleFunc("/api/query", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
