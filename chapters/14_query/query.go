@@ -1,6 +1,7 @@
 package chapter14
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	kv "dbmsfromscratch/chapters/06_kv"
 	parser "dbmsfromscratch/chapters/13_parser"
 )
 
@@ -16,17 +18,16 @@ type Result struct {
 	Rows    []map[string]string
 }
 
-
 type ColumnMetadata struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
 
 type TableMetadata struct {
-	Name       string          `json:"name"`
+	Name       string           `json:"name"`
 	Columns    []ColumnMetadata `json:"columns"`
-	PrimaryKey string          `json:"primaryKey"`
-	Indexes    []string        `json:"indexes"`
+	PrimaryKey string           `json:"primaryKey"`
+	Indexes    []string         `json:"indexes"`
 }
 
 type secondaryIndex struct {
@@ -42,10 +43,10 @@ type table struct {
 	indexDefs []parser.IndexDefinition
 }
 
-
 type Executor struct {
 	mu     sync.RWMutex
 	tables map[string]*table
+	store  *kv.KV
 }
 
 type evalValue struct {
@@ -57,6 +58,112 @@ type evalValue struct {
 
 func NewExecutor() *Executor {
 	return &Executor{tables: make(map[string]*table)}
+}
+
+type persistedTable struct {
+	Columns   []parser.ColumnDefinition `json:"columns"`
+	Rows      []map[string]string       `json:"rows"`
+	Primary   string                    `json:"primary,omitempty"`
+	IndexDefs []parser.IndexDefinition  `json:"indexes,omitempty"`
+}
+
+func OpenExecutor(path string) (*Executor, error) {
+	store, err := kv.Load(path)
+	if err != nil {
+		return nil, fmt.Errorf("open SQL database: %w", err)
+	}
+
+	executor := NewExecutor()
+	executor.store = store
+	for key, data := range store.Entries() {
+		const tablePrefix = "sql/table/"
+		if !strings.HasPrefix(key, tablePrefix) {
+			continue
+		}
+		name := strings.TrimPrefix(key, tablePrefix)
+		if name == "" || normalize(name) != name {
+			return nil, fmt.Errorf("invalid persisted table key %q", key)
+		}
+		var saved persistedTable
+		if err := json.Unmarshal([]byte(data), &saved); err != nil {
+			return nil, fmt.Errorf("decode persisted table %q: %w", name, err)
+		}
+		t := &table{
+			columns:   saved.Columns,
+			rows:      saved.Rows,
+			primary:   saved.Primary,
+			indexDefs: saved.IndexDefs,
+			indexes:   make(map[string]*secondaryIndex),
+		}
+		if err := validatePersistedTable(t); err != nil {
+			return nil, fmt.Errorf("invalid persisted table %q: %w", name, err)
+		}
+		executor.rebuildIndexes(t)
+		executor.tables[name] = t
+	}
+	return executor, nil
+}
+
+func validatePersistedTable(t *table) error {
+	if len(t.columns) == 0 {
+		return fmt.Errorf("table has no columns")
+	}
+	for i, column := range t.columns {
+		if column.Name == "" || column.Type == "" {
+			return fmt.Errorf("column %d has an empty name or type", i)
+		}
+		if columnIndex(t, column.Name) != i {
+			return fmt.Errorf("duplicate column %q", column.Name)
+		}
+	}
+	if t.primary != "" && columnIndex(t, t.primary) < 0 {
+		return fmt.Errorf("primary key column %q does not exist", t.primary)
+	}
+	for _, definition := range t.indexDefs {
+		if columnIndex(t, definition.Column) < 0 {
+			return fmt.Errorf("index column %q does not exist", definition.Column)
+		}
+	}
+	for rowIndex, row := range t.rows {
+		if row == nil {
+			return fmt.Errorf("row %d is null", rowIndex)
+		}
+		for _, column := range t.columns {
+			if _, ok := row[column.Name]; !ok {
+				return fmt.Errorf("row %d is missing column %q", rowIndex, column.Name)
+			}
+		}
+	}
+	return nil
+}
+
+func (e *Executor) persistLocked() error {
+	if e.store == nil {
+		return nil
+	}
+	entries := e.store.Entries()
+	const tablePrefix = "sql/table/"
+	for key := range entries {
+		if strings.HasPrefix(key, tablePrefix) {
+			delete(entries, key)
+		}
+	}
+	for name, t := range e.tables {
+		data, err := json.Marshal(persistedTable{
+			Columns:   t.columns,
+			Rows:      t.rows,
+			Primary:   t.primary,
+			IndexDefs: t.indexDefs,
+		})
+		if err != nil {
+			return fmt.Errorf("encode table %q for persistence: %w", name, err)
+		}
+		entries[tablePrefix+name] = string(data)
+	}
+	if err := e.store.ReplaceAll(entries); err != nil {
+		return fmt.Errorf("persist SQL database: %w", err)
+	}
+	return nil
 }
 
 func (e *Executor) Tables() []TableMetadata {
@@ -115,7 +222,6 @@ func (e *Executor) Execute(sql string) (Result, error) {
 	}
 }
 
-
 func (e *Executor) createTable(stmt parser.Statement) (Result, error) {
 
 	e.mu.Lock()
@@ -163,6 +269,10 @@ func (e *Executor) createTable(stmt parser.Statement) (Result, error) {
 	}
 	e.rebuildIndexes(t)
 	e.tables[key] = t
+	if err := e.persistLocked(); err != nil {
+		delete(e.tables, key)
+		return Result{}, err
+	}
 	return Result{}, nil
 }
 
@@ -177,7 +287,12 @@ func (e *Executor) dropTable(stmt parser.Statement) (Result, error) {
 		}
 		return Result{}, fmt.Errorf("table %q does not exist", stmt.Table)
 	}
+	previous := e.tables[key]
 	delete(e.tables, key)
+	if err := e.persistLocked(); err != nil {
+		e.tables[key] = previous
+		return Result{}, err
+	}
 	return Result{}, nil
 }
 
@@ -190,6 +305,7 @@ func (e *Executor) alterTable(stmt parser.Statement) (Result, error) {
 	if !exists {
 		return Result{}, fmt.Errorf("table %q does not exist", stmt.Table)
 	}
+	previousTables := e.cloneTables()
 
 	switch stmt.AlterAction {
 	case "ADD COLUMN":
@@ -257,6 +373,10 @@ func (e *Executor) alterTable(stmt parser.Statement) (Result, error) {
 		e.tables[newKey] = t
 	default:
 		return Result{}, fmt.Errorf("unsupported ALTER TABLE operation %q", stmt.AlterAction)
+	}
+	if err := e.persistLocked(); err != nil {
+		e.tables = previousTables
+		return Result{}, err
 	}
 	return Result{}, nil
 }
@@ -419,8 +539,14 @@ func (e *Executor) insertRows(stmt parser.Statement) (Result, error) {
 		}
 		newRows = append(newRows, row)
 	}
+	previousRows := cloneRows(t.rows)
 	t.rows = append(t.rows, newRows...)
 	e.rebuildIndexes(t)
+	if err := e.persistLocked(); err != nil {
+		t.rows = previousRows
+		e.rebuildIndexes(t)
+		return Result{}, err
+	}
 
 	resultRows := make([]map[string]string, len(newRows))
 	for i, row := range newRows {
@@ -520,6 +646,7 @@ func (e *Executor) updateRows(stmt parser.Statement) (Result, error) {
 			value map[string]string
 		}{row: row, value: updated})
 	}
+	previousRows := cloneRows(t.rows)
 	for _, item := range pending {
 		for key := range item.row {
 			delete(item.row, key)
@@ -530,6 +657,11 @@ func (e *Executor) updateRows(stmt parser.Statement) (Result, error) {
 		result.Rows = append(result.Rows, clone(item.row))
 	}
 	e.rebuildIndexes(t)
+	if err := e.persistLocked(); err != nil {
+		t.rows = previousRows
+		e.rebuildIndexes(t)
+		return Result{}, err
+	}
 	return result, nil
 }
 
@@ -548,6 +680,7 @@ func (e *Executor) deleteRows(stmt parser.Statement) (Result, error) {
 	for i, column := range t.columns {
 		result.Columns[i] = column.Name
 	}
+	previousRows := cloneRows(t.rows)
 	kept := make([]map[string]string, 0, len(t.rows))
 	for _, row := range t.rows {
 		matches, err := matchesExpression(stmt.Where, row, t)
@@ -562,6 +695,11 @@ func (e *Executor) deleteRows(stmt parser.Statement) (Result, error) {
 	}
 	t.rows = kept
 	e.rebuildIndexes(t)
+	if err := e.persistLocked(); err != nil {
+		t.rows = previousRows
+		e.rebuildIndexes(t)
+		return Result{}, err
+	}
 	return result, nil
 }
 
@@ -1022,6 +1160,29 @@ func clone(row map[string]string) map[string]string {
 		result[key] = value
 	}
 	return result
+}
+
+func cloneRows(rows []map[string]string) []map[string]string {
+	cloned := make([]map[string]string, len(rows))
+	for i, row := range rows {
+		cloned[i] = clone(row)
+	}
+	return cloned
+}
+
+func (e *Executor) cloneTables() map[string]*table {
+	cloned := make(map[string]*table, len(e.tables))
+	for name, current := range e.tables {
+		copy := &table{
+			columns:   append([]parser.ColumnDefinition(nil), current.columns...),
+			rows:      cloneRows(current.rows),
+			primary:   current.primary,
+			indexDefs: append([]parser.IndexDefinition(nil), current.indexDefs...),
+		}
+		e.rebuildIndexes(copy)
+		cloned[name] = copy
+	}
+	return cloned
 }
 
 func isComparison(operator string) bool {

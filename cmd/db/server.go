@@ -16,7 +16,23 @@ type requestBody struct {
 }
 
 func httpServer(port string) error {
-	executor := query.NewExecutor()
+	root, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	databasePath := os.Getenv("DB_PATH")
+	if databasePath == "" {
+		databasePath = filepath.Join(root, "data", "database.json")
+	}
+	executor, err := query.OpenExecutor(databasePath)
+	if err != nil {
+		return err
+	}
+	webRoot := filepath.Join(root, "cmd", "db", "web")
+	return http.ListenAndServe("0.0.0.0:"+port, newHandler(executor, webRoot))
+}
+
+func newHandler(executor *query.Executor, webRoot string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/schema", func(w http.ResponseWriter, r *http.Request) {
@@ -69,11 +85,6 @@ func httpServer(port string) error {
 		}
 	})
 
-	root, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	webRoot := filepath.Join(root, "cmd", "db", "web")
 	mux.Handle("/", http.FileServer(http.Dir(webRoot)))
-	return http.ListenAndServe("0.0.0.0:"+port, mux)
+	return mux
 }

@@ -13,7 +13,7 @@ The project is intentionally organized by chapter so the implementation reads li
 - [x] Chapter 03 — B-Tree & Crash Recovery
 - [x] Chapter 04 — B-Tree Node and Insertion
 - [x] Chapter 05 — B-Tree Deletion and Testing
-- [x] Chapter 06 — Append-Only KV Store
+- [x] Chapter 06 — B-Tree-Backed Persistent KV Store
 - [x] Chapter 07 — Free List: Recycle & Reuse
 - [x] Chapter 08 — Tables on KV
 - [x] Chapter 09 — Range Queries
@@ -54,7 +54,7 @@ Then open:
 
 http://localhost:8080
 
-The app serves a small browser UI that posts SQL-like statements to the built-in query executor. Tables and rows are currently held in memory and reset when the server restarts. Create tables with the columns you need; the executor does not assume a fixed table or column set:
+The app serves a small browser UI that posts SQL-like statements to the query parser and executor. Tables and rows are persisted in a B-tree-backed KV file at `data/database.json` by default, so successful changes survive server restarts. Set `DB_PATH` to use a different database file. Create tables with the columns you need; the executor does not assume a fixed table or column set:
 
 ```sql
 CREATE TABLE products (sku TEXT, name TEXT, price DECIMAL(10,2))
@@ -70,4 +70,6 @@ DROP TABLE products
 
 SQL keywords are case-insensitive. `CREATE TABLE` accepts column definitions, a single-column `PRIMARY KEY`, and single-column `INDEX` definitions. `INSERT` accepts an optional column list and one or more parenthesized `VALUES` rows. `SELECT` supports column projections, arithmetic/logical expressions with `AS` aliases, `INDEX BY`, `FILTER`, `WHERE`, and `LIMIT`; `LIMIT offset, count` is also accepted. `INDEX BY` must refer to a declared index or primary-key column and supports equality and comparison ranges, including reversed comparisons such as `20 < age`. `FILTER` and `WHERE` accept boolean expressions with `AND`, `OR`, and `NOT`. Expressions support comparisons, arithmetic, unary minus, integer/decimal literals, strings, booleans, and column references. `UPDATE` supports multiple expression assignments, optionally filtered by `WHERE`; `DELETE FROM` supports an optional `WHERE` expression. Non-column expressions in a `SELECT` projection require an `AS` alias.
 
-This query executor is an educational in-memory implementation: rows and indexes are not persisted and are reset when the server restarts. Its index structures are maintained by the executor and used for `INDEX BY` scans; they are separate from the earlier chapter demonstrations of storage structures.
+The SQL path is `HTTP /api/query → SQL parser → query executor → persistent KV store → B-tree → snapshot file`. The executor persists table definitions and rows after successful mutations; secondary indexes are rebuilt from rows when the database opens. The KV snapshot is currently rewritten atomically after each SQL mutation rather than updating disk pages in place. On Windows, the KV storage backend uses Win32 file APIs; other platforms use Go's `os` APIs.
+
+Chapter 06 is a separate persistent key-value store. It keeps string keys and values in a B-tree and writes a snapshot after each change when opened with `chapter06.Load(path)`. On Windows, snapshot reads and writes use Win32 file APIs (`CreateFileW`, `ReadFile`, `WriteFile`, `FlushFileBuffers`, and `MoveFileExW`) through Go's `syscall` package. Other operating systems use Go's `os` package as a portable fallback. The earlier integer B-tree examples in Chapters 03–05 remain in-memory data-structure demonstrations.
