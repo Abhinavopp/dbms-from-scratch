@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 )
 
-// FileDB is a tiny durable store that serializes a value to disk.
 type FileDB struct {
 	Path string
 }

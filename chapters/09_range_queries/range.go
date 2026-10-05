@@ -1,6 +1,6 @@
 package chapter09
 
-// Row is a tiny record type used to demonstrate ordered scans.
+
 type Row struct {
 	ID    int
 	Value string

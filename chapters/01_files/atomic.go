@@ -4,7 +4,6 @@ import (
 	"os"
 )
 
-// WriteAtomic writes a full file and swaps it into place atomically.
 func WriteAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(pathToDir(path), 0o755); err != nil {
 		return err

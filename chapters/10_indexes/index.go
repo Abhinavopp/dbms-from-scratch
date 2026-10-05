@@ -1,6 +1,6 @@
 package chapter10
 
-// Index stores row ids for each secondary key.
+
 type Index struct {
 	byValue map[string][]int
 }

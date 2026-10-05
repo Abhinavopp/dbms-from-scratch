@@ -1,7 +1,6 @@
 package chapter04
 
-// Node is a page-like B-tree node and keeps the split logic visible so it is easy
-// to understand what changes during insertion.
+
 type Node struct {
 	Keys     []int
 	Children []*Node
@@ -12,8 +11,7 @@ func newNode(leaf bool) *Node {
 	return &Node{Leaf: leaf}
 }
 
-// Tree is the insertion-focused tree from this chapter: keys are kept sorted,
-// and once the node grows too large it splits into a left and right child.
+
 type Tree struct {
 	Root  *Node
 	Order int

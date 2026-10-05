@@ -1,6 +1,6 @@
 package chapter05
 
-// Node is a small B-tree node used to demonstrate deletion and rebalance.
+
 type Node struct {
 	Keys     []int
 	Children []*Node
@@ -11,7 +11,7 @@ func newNode(leaf bool) *Node {
 	return &Node{Leaf: leaf}
 }
 
-// Tree is the deletion-focused version of the educational B-tree.
+
 type Tree struct {
 	Root  *Node
 	Order int

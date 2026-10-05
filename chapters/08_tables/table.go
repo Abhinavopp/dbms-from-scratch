@@ -1,18 +1,16 @@
 package chapter08
 
-// Schema defines the logical fields of a table.
+
 type Schema struct {
 	Name   string
 	Fields []string
 }
 
-// Record is a row identified by an integer primary key.
 type Record struct {
 	ID   int
 	Data map[string]string
 }
 
-// Table is the first row-oriented layer built on top of the KV store.
 type Table struct {
 	Schema Schema
 	rows   map[int]Record

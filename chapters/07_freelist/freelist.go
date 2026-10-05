@@ -1,6 +1,5 @@
 package chapter07
 
-// FreeList reuses page ids instead of allocating new ones forever.
 type FreeList struct {
 	free   []int
 	nextID int

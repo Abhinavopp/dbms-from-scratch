@@ -2,13 +2,11 @@ package chapter02
 
 import "sort"
 
-// Entry represents a key/value pair in a sorted index.
 type Entry struct {
 	Key   string
 	Value string
 }
 
-// SortedIndex keeps keys sorted and supports simple lookup and range scans.
 type SortedIndex struct {
 	entries []Entry
 }

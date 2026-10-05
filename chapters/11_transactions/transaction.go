@@ -1,6 +1,5 @@
 package chapter11
 
-// Transaction models a simple atomic unit of work.
 type Transaction struct {
 	writes map[string]string
 	state  bool

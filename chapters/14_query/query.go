@@ -11,19 +11,17 @@ import (
 	parser "dbmsfromscratch/chapters/13_parser"
 )
 
-// Result is the outcome of a query execution.
 type Result struct {
 	Columns []string
 	Rows    []map[string]string
 }
 
-// ColumnMetadata describes a table column for database exploration.
+
 type ColumnMetadata struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
 
-// TableMetadata describes a table including schema and indexes.
 type TableMetadata struct {
 	Name       string          `json:"name"`
 	Columns    []ColumnMetadata `json:"columns"`
@@ -44,7 +42,7 @@ type table struct {
 	indexDefs []parser.IndexDefinition
 }
 
-// Executor is an in-memory SQL executor for the educational database.
+
 type Executor struct {
 	mu     sync.RWMutex
 	tables map[string]*table
@@ -91,6 +89,7 @@ func (e *Executor) Tables() []TableMetadata {
 }
 
 func (e *Executor) Execute(sql string) (Result, error) {
+
 	stmt, err := parser.NewParser(sql).Parse()
 	if err != nil {
 		return Result{}, err
@@ -116,7 +115,9 @@ func (e *Executor) Execute(sql string) (Result, error) {
 	}
 }
 
+
 func (e *Executor) createTable(stmt parser.Statement) (Result, error) {
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -127,6 +128,7 @@ func (e *Executor) createTable(stmt parser.Statement) (Result, error) {
 		}
 		return Result{}, fmt.Errorf("table %q already exists", stmt.Table)
 	}
+
 	columns := make([]parser.ColumnDefinition, len(stmt.Definitions))
 	seen := make(map[string]bool, len(stmt.Definitions))
 	for i, column := range stmt.Definitions {

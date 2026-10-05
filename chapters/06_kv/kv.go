@@ -5,7 +5,6 @@ import (
 	"os"
 )
 
-// KV is the persistent key-value layer that sits above the tree pages.
 type KV struct {
 	data map[string]string
 }

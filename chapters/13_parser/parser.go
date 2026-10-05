@@ -7,19 +7,17 @@ import (
 	"unicode"
 )
 
-// ColumnDefinition describes a column declared by CREATE TABLE or ALTER TABLE.
 type ColumnDefinition struct {
 	Name string
 	Type string
 }
 
-// IndexDefinition declares an index over one table column.
 type IndexDefinition struct {
 	Name   string
 	Column string
 }
 
-// Expression is a node in the query-language expression tree.
+
 type Expression struct {
 	Kind     string
 	Value    string
@@ -28,27 +26,25 @@ type Expression struct {
 	Right    *Expression
 }
 
-// Condition is one simple comparison in a WHERE clause.
+
 type Condition struct {
 	Column   string
 	Operator string
 	Value    string
 }
 
-// Assignment is one column/expression pair in an UPDATE statement.
 type Assignment struct {
 	Column     string
 	Value      string
 	Expression *Expression
 }
 
-// SelectItem is a projected expression and its optional output alias.
+
 type SelectItem struct {
 	Expression *Expression
 	Alias      string
 }
 
-// Statement is the parsed representation of the supported query language.
 type Statement struct {
 	Kind          string
 	Table         string
@@ -81,7 +77,6 @@ type token struct {
 	kind byte
 }
 
-// Parser parses a single query-language statement.
 type Parser struct {
 	tokens   []token
 	pos      int

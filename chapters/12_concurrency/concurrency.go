@@ -2,7 +2,7 @@ package chapter12
 
 import "sync"
 
-// RWStore represents a simple concurrent access layer with a reader-writer lock.
+
 type RWStore struct {
 	mu   sync.RWMutex
 	data map[string]string

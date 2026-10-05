@@ -1,7 +1,6 @@
 package chapter03
 
-// Node is a small page-like B-tree node. It keeps the chapter simple while
-// modeling the same disk-oriented idea used later in the project.
+
 type Node struct {
 	Keys     []int
 	Children []*Node
@@ -12,7 +11,6 @@ func newNode(leaf bool) *Node {
 	return &Node{Leaf: leaf}
 }
 
-// BTree is intentionally compact so the progression stays readable.
 type BTree struct {
 	Root  *Node
 	Order int
